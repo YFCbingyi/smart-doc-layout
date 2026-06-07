@@ -49,12 +49,32 @@ _WORD_FONT_SIZES: list[tuple[str, float]] = [
 ]
 _FONT_SIZE_CHOICES = [f"{name}({int(pt) if pt == int(pt) else pt}pt)" for name, pt in _WORD_FONT_SIZES]
 
-_DF_HEADERS = ["序号", "段落类型", "文本内容", "样式预览"]
-_DF_DATATYPE = ["str", "str", "str", "str"]
+_DF_HEADERS = ["序号", "段落类型", "文本内容"]
+_DF_DATATYPE = ["str", "str", "str"]
 
 # ─────────────────────────────────────────────
 # 辅助函数
 # ─────────────────────────────────────────────
+
+
+_PARAGRAPH_TYPE_CN: dict[str, str] = {
+    "title": "主标题",
+    "subtitle": "副标题",
+    "body": "正文",
+}
+
+
+def _type_to_cn(p: ParagraphModify) -> str:
+    """将段落类型和标题级别转换为中文显示。"""
+    if p.type == ParagraphType.title:
+        return "主标题"
+    elif p.type == ParagraphType.subtitle:
+        return "副标题"
+    elif p.type == ParagraphType.heading:
+        level_map = {1: "标题一", 2: "标题二", 3: "标题三", 4: "标题四"}
+        return level_map.get(p.heading_level or 1, "标题一")
+    else:
+        return "正文"
 
 
 def _make_style_preview(style: Optional[TextStyleInput]) -> str:
@@ -268,11 +288,12 @@ def build_ui() -> gr.Blocks:
         df_paragraphs = gr.Dataframe(
             headers=_DF_HEADERS,
             datatype=_DF_DATATYPE,
-            column_count=4,
+            column_count=3,
+            static_columns=[0, 2],
             interactive=True,
-            label="使用说明：段落类型可手动输入修改",
+            label="使用说明：段落类型支持输入中文类型名称",
         )
-        gr.Markdown("使用说明：段落类型可手动输入修改（支持：title/subtitle/heading/body/list/other）")
+        gr.Markdown("使用说明：段落类型可手动输入修改（支持：主标题/副标题/标题一/标题二/标题三/标题四/正文）")
 
         # ── 调试模式 ──
         with gr.Row():
@@ -363,9 +384,8 @@ def build_ui() -> gr.Blocks:
             for p in paragraphs:
                 df_data.append([
                     str(p.index + 1),
-                    p.type.value if p.type else "",
+                    _type_to_cn(p),
                     (p.text or "")[:80],
-                    _make_style_preview(p.style),
                 ])
 
             # ── 提取样式 ──
@@ -610,8 +630,7 @@ def build_ui() -> gr.Blocks:
                         for _, row in df_value.iterrows():
                             row_list = [str(row.iloc[0]) if pd.notna(row.iloc[0]) else "",
                                          str(row.iloc[1]) if pd.notna(row.iloc[1]) else "",
-                                         str(row.iloc[2]) if pd.notna(row.iloc[2]) else "",
-                                         str(row.iloc[3]) if pd.notna(row.iloc[3]) else ""]
+                                         str(row.iloc[2]) if pd.notna(row.iloc[2]) else ""]
                             _build_paragraph(paragraphs, *row_list)
                     elif isinstance(df_value, list):
                         for row in df_value:
@@ -736,12 +755,22 @@ def build_ui() -> gr.Blocks:
                 raise gr.Error(f"处理失败: {e}") from e
 
 
+        _CN_TO_PARAGRAPH_TYPE: dict[str, tuple[ParagraphType, Optional[int]]] = {
+            "主标题": (ParagraphType.title, None),
+            "副标题": (ParagraphType.subtitle, None),
+            "标题一": (ParagraphType.heading, 1),
+            "标题二": (ParagraphType.heading, 2),
+            "标题三": (ParagraphType.heading, 3),
+            "标题四": (ParagraphType.heading, 4),
+            "正文": (ParagraphType.body, None),
+        }
+
+
         def _build_paragraph(
             paragraphs: list[ParagraphModify],
             idx_str: str,
             type_str: str,
             text: str,
-            _preview: str = "",
         ) -> None:
             """从 Dataframe 行数据构建 ParagraphModify 并追加到列表。"""
             try:
@@ -749,15 +778,18 @@ def build_ui() -> gr.Blocks:
             except (ValueError, TypeError):
                 return
             p_type: Optional[ParagraphType] = None
+            heading_level: Optional[int] = None
             if type_str:
-                try:
-                    p_type = ParagraphType(type_str.strip())
-                except ValueError:
+                mapping = _CN_TO_PARAGRAPH_TYPE
+                if type_str.strip() in mapping:
+                    p_type, heading_level = mapping[type_str.strip()]
+                else:
                     p_type = ParagraphType.other
             paragraphs.append(
                 ParagraphModify(
                     index=p_idx,
                     type=p_type,
+                    heading_level=heading_level,
                     text=text or None,
                 )
             )
