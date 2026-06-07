@@ -132,6 +132,49 @@ def _set_paragraph_text(paragraph: Paragraph, text: str, style: Optional[TextSty
         paragraph.add_run("")
 
 
+def _remove_sdt_wrappers(oxml_element: object) -> None:
+    """移除 OOXML 元素中的所有 w:sdt（内容控件）包装器。
+
+    SDT 内的 w:p 段落会被提取为直接子元素，然后移除 SDT 包装器本身。
+    这确保 python-docx 的 paragraphs 属性可以正确访问所有段落。
+    注意以逆序插入保持原始文档顺序。
+    """
+    sdt_elements = list(oxml_element.findall(qn("w:sdt")))  # type: ignore[union-attr]
+    for sdt in sdt_elements:
+        index = list(oxml_element).index(sdt)  # type: ignore[arg-type]
+        sdt_content = sdt.find(qn("w:sdtContent"))
+        if sdt_content is not None:
+            # 逆序插入以保持子元素原始顺序
+            for child in reversed(list(sdt_content)):
+                oxml_element.insert(index, child)  # type: ignore[union-attr]
+        oxml_element.remove(sdt)  # type: ignore[union-attr]
+
+
+def _set_page_number_font(paragraph: Paragraph, modify_data: HeaderFooterInput) -> None:
+    """统一设置页码段落的字体，确保奇偶页页码高度一致。
+
+    优先级：
+    1. modify_data.style 中指定的 font_name / font_size
+    2. 原段落已有的字体属性（已通过 add_page_number 内的 clear 清除）
+    3. 默认值（"仿宋", 14pt）
+    """
+    font_size_pt: Optional[float] = None
+    font_name: Optional[str] = None
+
+    # 优先使用配置中的字体
+    if modify_data.style is not None:
+        if modify_data.style.font_size is not None:
+            font_size_pt = modify_data.style.font_size
+        if modify_data.style.font_name is not None:
+            font_name = modify_data.style.font_name
+
+    for r in paragraph.runs:
+        if font_size_pt is not None:
+            r.font.size = Pt(font_size_pt)
+        if font_name is not None:
+            r.font.name = font_name
+
+
 def _set_heading_level(paragraph: Paragraph, level: int) -> None:
     """设置段落为标题级别。"""
     style_name = f"Heading {level}"
@@ -155,6 +198,9 @@ def _modify_section_header_footer(
     # 确保不linked to previous，才能独立修改
     if hf_obj.is_linked_to_previous:
         hf_obj.is_linked_to_previous = False
+
+    # 移除 SDT 内容控件，确保段落可被正常访问
+    _remove_sdt_wrappers(hf_obj._element)
 
     # 修改内容
     if modify_data.content is not None:
@@ -185,6 +231,9 @@ def _modify_section_header_footer(
             if has_page_number(first_para):
                 remove_page_number(first_para)
             add_page_number(first_para, pn_config.format)
+
+            # 统一设置页码字体，确保奇偶页高度一致
+            _set_page_number_font(first_para, modify_data)
         else:
             # 移除页码
             if has_page_number(first_para):
@@ -209,6 +258,9 @@ def _modify_even_page_footer(
     # 确保不 linked to previous
     if even_footer.is_linked_to_previous:
         even_footer.is_linked_to_previous = False
+
+    # 移除 SDT 内容控件，确保段落可被正常访问
+    _remove_sdt_wrappers(even_footer._element)
 
     # 修改内容
     if modify_data.content is not None:
@@ -236,6 +288,9 @@ def _modify_even_page_footer(
             if has_page_number(first_para):
                 remove_page_number(first_para)
             add_page_number(first_para, pn_config.format)
+
+            # 统一设置页码字体，确保奇偶页高度一致
+            _set_page_number_font(first_para, modify_data)
         else:
             if has_page_number(first_para):
                 remove_page_number(first_para)
