@@ -49,8 +49,9 @@ _WORD_FONT_SIZES: list[tuple[str, float]] = [
 ]
 _FONT_SIZE_CHOICES = [f"{name}({int(pt) if pt == int(pt) else pt}pt)" for name, pt in _WORD_FONT_SIZES]
 
-_DF_HEADERS = ["序号", "段落类型", "文本内容"]
-_DF_DATATYPE = ["str", "str", "str"]
+_DF_HEADERS = ["选择", "序号", "段落类型", "文本内容"]
+_DF_DATATYPE = ["bool", "str", "str", "str"]
+_PARAGRAPH_TYPE_CHOICES = ["主标题", "副标题", "标题一", "标题二", "标题三", "标题四", "正文"]
 
 # ─────────────────────────────────────────────
 # 辅助函数
@@ -161,6 +162,7 @@ def build_ui() -> gr.Blocks:
         # ── 状态 ──
         state_data = gr.State()  # 存储 ModifyInput dict
         state_path = gr.State()  # 存储输入文件路径
+
 
         # ── 1. 文件输入/输出 ──
         with gr.Row():
@@ -285,15 +287,26 @@ def build_ui() -> gr.Blocks:
 
         # ── 5. 段落列表 ──
         gr.Markdown("### 段落列表")
+
+        # ── 操作区 ──
+        with gr.Row():
+            chk_select_all = gr.Checkbox(label="☑ 全选", value=False)
+            dd_batch_type = gr.Dropdown(
+                choices=_PARAGRAPH_TYPE_CHOICES,
+                label="批量修改类型",
+                scale=2,
+            )
+            btn_apply = gr.Button("应用", variant="primary", scale=1)
+
         df_paragraphs = gr.Dataframe(
             headers=_DF_HEADERS,
             datatype=_DF_DATATYPE,
-            column_count=3,
-            static_columns=[0, 2],
+            column_count=4,
             interactive=True,
-            label="使用说明：段落类型支持输入中文类型名称",
+            static_columns=[1, 2, 3],
+            label="勾选需要修改的段落，通过上方操作区批量修改",
         )
-        gr.Markdown("使用说明：段落类型可手动输入修改（支持：主标题/副标题/标题一/标题二/标题三/标题四/正文）")
+        gr.Markdown("💡 使用说明：勾选段落左侧的复选框，选中「全选」可选中全部；选择类型后点击「应用」批量修改选中段落的类型")
 
         # ── 调试模式 ──
         with gr.Row():
@@ -307,6 +320,29 @@ def build_ui() -> gr.Blocks:
         # ═════════════════════════════════════
         # 回调：识别
         # ═════════════════════════════════════
+
+        def _df_value_to_rows(df_value: Any) -> list[list]:
+            """将 Dataframe 的值统一转换为可变的 list[list]。"""
+            if df_value is None:
+                return []
+            import pandas as pd
+            if isinstance(df_value, pd.DataFrame):
+                result: list[list] = []
+                for _, row in df_value.iterrows():
+                    row_list: list = []
+                    for v in row:
+                        if pd.isna(v):
+                            row_list.append("")
+                        elif isinstance(v, bool):
+                            row_list.append(v)
+                        else:
+                            row_list.append(str(v))
+                    result.append(row_list)
+                return result
+            elif isinstance(df_value, list):
+                return [list(row) for row in df_value]
+            return []
+
 
         def _recognize(
             file: Any,
@@ -380,9 +416,10 @@ def build_ui() -> gr.Blocks:
                 odd_even_enabled = sec.enable_odd_even
 
             # ── 段落 Dataframe ──
-            df_data: list[list[str]] = []
+            df_data: list[list] = []
             for p in paragraphs:
                 df_data.append([
+                    False,
                     str(p.index + 1),
                     _type_to_cn(p),
                     (p.text or "")[:80],
@@ -628,15 +665,15 @@ def build_ui() -> gr.Blocks:
                     import pandas as pd
                     if isinstance(df_value, pd.DataFrame):
                         for _, row in df_value.iterrows():
-                            row_list = [str(row.iloc[0]) if pd.notna(row.iloc[0]) else "",
-                                         str(row.iloc[1]) if pd.notna(row.iloc[1]) else "",
-                                         str(row.iloc[2]) if pd.notna(row.iloc[2]) else ""]
+                            row_list = [str(row.iloc[1]) if pd.notna(row.iloc[1]) else "",
+                                         str(row.iloc[2]) if pd.notna(row.iloc[2]) else "",
+                                         str(row.iloc[3]) if pd.notna(row.iloc[3]) else ""]
                             _build_paragraph(paragraphs, *row_list)
                     elif isinstance(df_value, list):
                         for row in df_value:
-                            if not row or len(row) < 3:
+                            if not row or len(row) < 4:
                                 continue
-                            _build_paragraph(paragraphs, *row)
+                            _build_paragraph(paragraphs, *row[1:4])
 
                 # 合并 margins 到 state_data（存储但不传给 modify_document）
                 modify_state = json.loads(json.dumps(_state_data))
@@ -753,6 +790,34 @@ def build_ui() -> gr.Blocks:
                 raise
             except Exception as e:
                 raise gr.Error(f"处理失败: {e}") from e
+
+
+        def _on_select_all(select_all: bool, df_value: Any) -> Any:
+            """全选/取消全选：更新所有行的复选框列。"""
+            rows = _df_value_to_rows(df_value)
+            if not rows:
+                return gr.update()
+            for row in rows:
+                row[0] = True if select_all else False
+            return gr.update(value=rows)
+
+
+        def _on_apply_batch(new_type: str, df_value: Any) -> Any:
+            """批量应用：将选中段落的类型批量修改。"""
+            if not new_type:
+                raise gr.Error("请先选择要修改的目标类型")
+            rows = _df_value_to_rows(df_value)
+            if not rows:
+                return gr.update()
+            modified = False
+            for row in rows:
+                if row[0]:
+                    if len(row) > 2:
+                        row[2] = new_type
+                        modified = True
+            if not modified:
+                raise gr.Error("请先勾选需要修改的段落")
+            return gr.update(value=rows)
 
 
         _CN_TO_PARAGRAPH_TYPE: dict[str, tuple[ParagraphType, Optional[int]]] = {
@@ -883,6 +948,20 @@ def build_ui() -> gr.Blocks:
                 df_paragraphs,
             ],
             outputs=[file_output],
+        )
+
+        # 全选/取消全选
+        chk_select_all.change(
+            fn=_on_select_all,
+            inputs=[chk_select_all, df_paragraphs],
+            outputs=[df_paragraphs],
+        )
+
+        # 批量应用
+        btn_apply.click(
+            fn=_on_apply_batch,
+            inputs=[dd_batch_type, df_paragraphs],
+            outputs=[df_paragraphs],
         )
 
     return demo
