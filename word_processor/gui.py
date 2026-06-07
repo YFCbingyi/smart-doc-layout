@@ -202,6 +202,9 @@ def build_ui() -> gr.Blocks:
                 dd_page_align = gr.Dropdown(
                     choices=_ALIGN_CHOICES, label="页码对齐", value="center", scale=2
                 )
+                num_footer_distance = gr.Number(
+                    label="页脚距(cm)", value=1.5, minimum=0, maximum=10, step=0.1
+                )
             with gr.Row():
                 chk_odd_even = gr.Checkbox(label="奇偶分页启用", value=False)
             with gr.Row(visible=False) as even_config_row:
@@ -414,6 +417,7 @@ def build_ui() -> gr.Blocks:
                 if sec.even_page_footer is not None and sec.even_page_footer.page_number is not None:
                     even_page_align = sec.even_page_footer.page_number.format or "center"
                 odd_even_enabled = sec.enable_odd_even
+                footer_distance_cm = sec.footer_distance_cm if sec.footer_distance_cm is not None else 1.5
 
             # ── 段落 Dataframe ──
             df_data: list[list] = []
@@ -454,6 +458,7 @@ def build_ui() -> gr.Blocks:
                     _ALIGN_CHOICES,
                 ) or "center", visible=odd_even_enabled),
                 gr.update(value=even_page_align, visible=odd_even_enabled),
+                gr.update(value=footer_distance_cm),
                 gr.update(value=2.54),
                 gr.update(value=2.54),
                 gr.update(value=2.54),
@@ -528,6 +533,7 @@ def build_ui() -> gr.Blocks:
             even_header_size: str,
             even_header_align: str,
             even_page_align_val: str,
+            footer_distance_cm: float,
             margin_top: float,
             margin_bottom: float,
             margin_left: float,
@@ -623,6 +629,7 @@ def build_ui() -> gr.Blocks:
                         header=header_input,
                         footer=footer_input,
                         enable_odd_even=odd_even,
+                        footer_distance_cm=footer_distance_cm,
                     )
                 ]
 
@@ -879,6 +886,7 @@ def build_ui() -> gr.Blocks:
             dd_even_header_size,
             dd_even_header_align,
             dd_even_page_align,
+            num_footer_distance,
             num_margin_top,
             num_margin_bottom,
             num_margin_left,
@@ -934,6 +942,7 @@ def build_ui() -> gr.Blocks:
                 dd_even_header_size,
                 dd_even_header_align,
                 dd_even_page_align,
+                num_footer_distance,
                 num_margin_top,
                 num_margin_bottom,
                 num_margin_left,

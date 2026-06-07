@@ -246,6 +246,14 @@ def _extract_section_data(index: int, section: Section) -> SectionModify:
     except Exception:
         pass
 
+    # 读取页脚距离
+    footer_distance_cm = None
+    try:
+        if section.footer_distance is not None:
+            footer_distance_cm = round(section.footer_distance / 360000, 2)
+    except Exception:
+        pass
+
     return SectionModify(
         index=index,
         header=header,
@@ -253,6 +261,7 @@ def _extract_section_data(index: int, section: Section) -> SectionModify:
         even_page_header=even_header,
         even_page_footer=even_footer,
         enable_odd_even=odd_even_enabled,
+        footer_distance_cm=footer_distance_cm,
     )
 
 

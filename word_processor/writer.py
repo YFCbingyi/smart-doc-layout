@@ -409,6 +409,11 @@ def modify_document(
             except Exception:
                 pass
 
+        # 应用页脚距
+        if section_mod.footer_distance_cm is not None:
+            section = doc.sections[section_mod.index]
+            section.footer_distance = Emu(int(section_mod.footer_distance_cm * 360000))
+
         if section_mod.header is not None:
             _modify_section_header_footer(
                 doc, section_mod.index, is_header=True, modify_data=section_mod.header

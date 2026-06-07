@@ -87,6 +87,9 @@ class SectionModify(BaseModel):
     enable_odd_even: bool = Field(
         default=False, description="是否启用了奇偶页不同的页眉页脚"
     )
+    footer_distance_cm: Optional[float] = Field(
+        None, ge=0, le=10, description="页脚距底端距离(cm)"
+    )
 
 
 class ParagraphModify(BaseModel):
