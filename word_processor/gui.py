@@ -985,6 +985,6 @@ if __name__ == "__main__":
 
 
 def main() -> None:
-    """启动 GUI 服务。"""
+    """启动 GUI 服务并自动打开浏览器。"""
     demo = build_ui()
-    demo.launch(server_name="127.0.0.1", server_port=7860)
+    demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)
