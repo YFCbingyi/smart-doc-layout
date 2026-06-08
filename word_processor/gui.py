@@ -980,11 +980,11 @@ def build_ui() -> gr.Blocks:
 # 入口
 # ─────────────────────────────────────────────
 
-if __name__ == "__main__":
-    main()
-
 
 def main() -> None:
     """启动 GUI 服务并自动打开浏览器。"""
     demo = build_ui()
-    demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)
+    demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True, quiet=True)
+
+if __name__ == "__main__":
+    main()
