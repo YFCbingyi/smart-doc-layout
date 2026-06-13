@@ -12,6 +12,12 @@ from typing import Any, Optional
 
 import gradio as gr
 
+from word_processor.template import (
+    list_templates,
+    save_template,
+    load_template,
+    rename_template,
+)
 from word_processor.models import (
     AlignmentType,
     HeaderFooterInput,
@@ -180,6 +186,25 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             btn_recognize_raw = gr.Button("原文格式识别", variant="secondary", size="lg")
             btn_recognize_smart = gr.Button("智能辅助识别", variant="secondary", size="lg")
+
+        # ── 2.5 模板管理 ──
+        state_templates = gr.State([])
+        with gr.Accordion("模板", open=True):
+            with gr.Row():
+                dd_template = gr.Dropdown(
+                    label="已有模板",
+                    choices=[],
+                    value=None,
+                    scale=3,
+                )
+                txt_template_name = gr.Textbox(
+                    label="模板名称",
+                    placeholder="输入模板名称...",
+                    scale=3,
+                )
+                btn_save_template = gr.Button("保存模板", variant="primary", scale=1)
+                btn_load_template = gr.Button("加载模板", variant="secondary", scale=1)
+                btn_rename_template = gr.Button("重命名", variant="secondary", scale=1)
 
         # ── 3. 基本配置 ──
         with gr.Accordion("基本配置", open=False):
@@ -827,6 +852,110 @@ def build_ui() -> gr.Blocks:
             return gr.update(value=rows)
 
 
+        # ── 模板回调 ──
+
+        # 保存模板时收集的配置组件列表（input/output 共用顺序）
+        _TPL_CONFIG_INPUTS: list = [
+            txt_header_content, dd_header_font, dd_header_size, dd_header_align,
+            chk_page_number, txt_page_format, dd_page_align, chk_odd_even,
+            txt_even_header, dd_even_header_font, dd_even_header_size, dd_even_header_align,
+            dd_even_page_align, num_footer_distance,
+            num_margin_top, num_margin_bottom, num_margin_left, num_margin_right,
+            dd_title_font, dd_title_size, chk_title_bold, dd_title_align, num_title_indent,
+            dd_subtitle_font, dd_subtitle_size, chk_subtitle_bold, dd_subtitle_align, num_subtitle_indent,
+            dd_heading1_font, dd_heading1_size, chk_heading1_bold, dd_heading1_align, num_heading1_indent,
+            dd_heading2_font, dd_heading2_size, chk_heading2_bold, dd_heading2_align, num_heading2_indent,
+            dd_heading3_font, dd_heading3_size, chk_heading3_bold, dd_heading3_align, num_heading3_indent,
+            dd_heading4_font, dd_heading4_size, chk_heading4_bold, dd_heading4_align, num_heading4_indent,
+            dd_body_font, dd_body_size, dd_body_align, num_body_indent, num_body_line_spacing,
+        ]
+
+        _TPL_CONFIG_KEYS: list[str] = [
+            "header_content", "header_font", "header_size", "header_align",
+            "page_enabled", "page_format", "page_align", "odd_even",
+            "even_header", "even_header_font", "even_header_size", "even_header_align",
+            "even_page_align", "footer_distance_cm",
+            "margin_top", "margin_bottom", "margin_left", "margin_right",
+            "title_font", "title_size", "title_bold", "title_align", "title_indent",
+            "subtitle_font", "subtitle_size", "subtitle_bold", "subtitle_align", "subtitle_indent",
+            "heading1_font", "heading1_size", "heading1_bold", "heading1_align", "heading1_indent",
+            "heading2_font", "heading2_size", "heading2_bold", "heading2_align", "heading2_indent",
+            "heading3_font", "heading3_size", "heading3_bold", "heading3_align", "heading3_indent",
+            "heading4_font", "heading4_size", "heading4_bold", "heading4_align", "heading4_indent",
+            "body_font", "body_size", "body_align", "body_indent", "body_line_spacing",
+        ]
+
+
+        def _on_page_load() -> dict:
+            """页面加载时初始化模板下拉框。"""
+            tpl_list = list_templates()
+            return gr.update(choices=tpl_list, value=None)
+
+
+        def _on_save_template(
+            template_name: str,
+            *config_values,
+        ) -> dict:
+            """保存当前配置为模板。"""
+            if not template_name or not template_name.strip():
+                raise gr.Error("模板名称不能为空")
+
+            template_name = template_name.strip()
+
+            # 构建配置字典
+            data: dict = {}
+            for i, key in enumerate(_TPL_CONFIG_KEYS):
+                data[key] = config_values[i]
+
+            # 检查是否已存在
+            existing = list_templates()
+            if template_name in existing:
+                gr.Warning(f"模板 '{template_name}' 已存在，将覆盖原有模板")
+            save_template(template_name, data)
+
+            # 刷新下拉框
+            new_list = list_templates()
+            gr.Info(f"模板 '{template_name}' 已保存")
+            return gr.update(choices=new_list, value=template_name)
+
+
+        def _on_load_template(template_name: str) -> tuple:
+            """加载模板配置到界面。"""
+            if not template_name:
+                raise gr.Error("请先选择要加载的模板")
+
+            data = load_template(template_name)
+
+            # 按顺序构建更新
+            updates: list = []
+            for key in _TPL_CONFIG_KEYS:
+                val = data.get(key)
+                updates.append(gr.update(value=val))
+
+            gr.Info(f"已加载模板 '{template_name}'")
+            return tuple(updates)
+
+
+        def _on_rename_template(template_name: str, new_name: str) -> dict:
+            """重命名模板。"""
+            if not template_name:
+                raise gr.Error("请先在「已有模板」下拉框中选择要重命名的模板")
+            if not new_name or not new_name.strip():
+                raise gr.Error("新名称不能为空")
+
+            new_name = new_name.strip()
+            try:
+                rename_template(template_name, new_name)
+            except FileExistsError:
+                raise gr.Error(f"模板 '{new_name}' 已存在，请使用其他名称")
+            except FileNotFoundError:
+                raise gr.Error(f"模板 '{template_name}' 不存在")
+
+            new_list = list_templates()
+            gr.Info(f"模板已重命名为 '{new_name}'")
+            return gr.update(choices=new_list, value=new_name)
+
+
         _CN_TO_PARAGRAPH_TYPE: dict[str, tuple[ParagraphType, Optional[int]]] = {
             "主标题": (ParagraphType.title, None),
             "副标题": (ParagraphType.subtitle, None),
@@ -971,6 +1100,33 @@ def build_ui() -> gr.Blocks:
             fn=_on_apply_batch,
             inputs=[dd_batch_type, df_paragraphs],
             outputs=[df_paragraphs],
+        )
+
+        # 模板：页面加载时初始化下拉框
+        demo.load(
+            fn=_on_page_load,
+            outputs=[dd_template],
+        )
+
+        # 模板：保存
+        btn_save_template.click(
+            fn=_on_save_template,
+            inputs=[txt_template_name] + _TPL_CONFIG_INPUTS,
+            outputs=[dd_template],
+        )
+
+        # 模板：加载
+        btn_load_template.click(
+            fn=_on_load_template,
+            inputs=[dd_template],
+            outputs=_TPL_CONFIG_INPUTS,
+        )
+
+        # 模板：重命名
+        btn_rename_template.click(
+            fn=_on_rename_template,
+            inputs=[dd_template, txt_template_name],
+            outputs=[dd_template],
         )
 
     return demo
