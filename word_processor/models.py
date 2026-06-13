@@ -51,7 +51,8 @@ class TextStyleInput(BaseModel):
     alignment: Optional[AlignmentType] = Field(
         None, description="对齐方式：left/center/right/justify/unknown"
     )
-    line_spacing: Optional[float] = Field(None, description="行距")
+    line_spacing: Optional[float] = Field(None, description="行距（倍数或磅值，由line_spacing_is_pt决定）")
+    line_spacing_is_pt: Optional[bool] = Field(None, description="行距是否为磅值（True=磅值，False=倍数）")
     space_before: Optional[float] = Field(None, description="段前间距（磅值）")
     space_after: Optional[float] = Field(None, description="段后间距（磅值）")
     first_line_indent: Optional[float] = Field(None, description="首行缩进（磅值）")

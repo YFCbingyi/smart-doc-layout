@@ -96,11 +96,15 @@ def _apply_style_to_paragraph(paragraph: Paragraph, style: TextStyleInput) -> No
         paragraph.alignment = _alignment_to_docx(style.alignment)
 
     if style.line_spacing is not None:
-        # 如果行距值 > 10，视为磅值 → 用 Pt() 包装
-        if isinstance(style.line_spacing, (int, float)) and style.line_spacing > 10:
+        # 根据 line_spacing_is_pt 判断是否为磅值
+        if style.line_spacing_is_pt:
             pf.line_spacing = Pt(style.line_spacing)
         else:
-            pf.line_spacing = style.line_spacing
+            # 旧逻辑：如果行距值 > 10，视为磅值 → 用 Pt() 包装
+            if isinstance(style.line_spacing, (int, float)) and style.line_spacing > 10:
+                pf.line_spacing = Pt(style.line_spacing)
+            else:
+                pf.line_spacing = style.line_spacing
 
     if style.space_before is not None:
         pf.space_before = Pt(style.space_before)

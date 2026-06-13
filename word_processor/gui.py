@@ -36,7 +36,23 @@ from word_processor.writer import modify_document
 # ─────────────────────────────────────────────
 
 _FONT_CHOICES = ["宋体", "黑体", "仿宋", "楷体"]
-_ALIGN_CHOICES = ["left", "center", "right", "unknown", "justify"]
+_ALIGN_CHOICES = ["左对齐", "居中", "右对齐", "未知", "两端对齐"]
+
+_ALIGN_CN_TO_EN: dict[str, str] = {
+    "左对齐": "left",
+    "居中": "center",
+    "右对齐": "right",
+    "未知": "unknown",
+    "两端对齐": "justify",
+}
+
+_ALIGN_EN_TO_CN: dict[str, str] = {
+    "left": "左对齐",
+    "center": "居中",
+    "right": "右对齐",
+    "unknown": "未知",
+    "justify": "两端对齐",
+}
 
 # 标准 Word 中文字号映射表（中文名称 → pt值）
 _WORD_FONT_SIZES: list[tuple[str, float]] = [
@@ -117,6 +133,20 @@ def _safe_choice(value: Optional[str], choices: list[str]) -> Optional[str]:
     if value in choices:
         return value
     return None
+
+
+def _align_en_to_cn(en_value: Optional[str]) -> str:
+    """将英文对齐值转换为中文显示值。"""
+    if not en_value:
+        return "未知"
+    return _ALIGN_EN_TO_CN.get(en_value, "未知")
+
+
+def _align_cn_to_en(cn_value: Optional[str]) -> str:
+    """将中文对齐值转换为英文值。"""
+    if not cn_value:
+        return "unknown"
+    return _ALIGN_CN_TO_EN.get(cn_value, "unknown")
 
 
 def _closest_font_size(pt_value: Optional[float]) -> Optional[str]:
@@ -217,7 +247,7 @@ def build_ui() -> gr.Blocks:
                     choices=_FONT_SIZE_CHOICES, label="页眉字号", value="五号(10.5pt)"
                 )
                 dd_header_align = gr.Dropdown(
-                    choices=_ALIGN_CHOICES, label="页眉对齐", value="center"
+                    choices=_ALIGN_CHOICES, label="页眉对齐", value="居中"
                 )
             with gr.Row():
                 chk_page_number = gr.Checkbox(label="页码启用", value=False)
@@ -225,7 +255,7 @@ def build_ui() -> gr.Blocks:
                     label="页码格式", value="{PAGE}", scale=3
                 )
                 dd_page_align = gr.Dropdown(
-                    choices=_ALIGN_CHOICES, label="页码对齐", value="center", scale=2
+                    choices=_ALIGN_CHOICES, label="页码对齐", value="居中", scale=2
                 )
                 num_footer_distance = gr.Number(
                     label="页脚距(cm)", value=1.5, minimum=0, maximum=10, step=0.1
@@ -241,13 +271,13 @@ def build_ui() -> gr.Blocks:
                     choices=_FONT_SIZE_CHOICES, label="偶数页字号", value="五号(10.5pt)"
                 )
                 dd_even_header_align = gr.Dropdown(
-                    choices=_ALIGN_CHOICES, label="偶数页对齐", value="center"
+                    choices=_ALIGN_CHOICES, label="偶数页对齐", value="居中"
                 )
             with gr.Row(visible=False) as even_footer_row:
                 dd_even_page_align = gr.Dropdown(
                     choices=_ALIGN_CHOICES,
                     label="偶数页页码对齐",
-                    value="center",
+                    value="居中",
                 )
             chk_odd_even.change(
                 fn=lambda v: (gr.update(visible=v), gr.update(visible=v)),
@@ -274,43 +304,46 @@ def build_ui() -> gr.Blocks:
                 dd_title_font = gr.Dropdown(choices=_FONT_CHOICES, label="主标题字体", scale=2)
                 dd_title_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="主标题字号", value="三号(16pt)")
                 chk_title_bold = gr.Checkbox(label="主标题加粗", value=True)
-                dd_title_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="主标题对齐", value="center", scale=2)
+                dd_title_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="主标题对齐", value="居中", scale=2)
                 num_title_indent = gr.Number(label="主标题缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_subtitle_font = gr.Dropdown(choices=_FONT_CHOICES, label="副标题字体", scale=2)
                 dd_subtitle_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="副标题字号", value="三号(16pt)")
                 chk_subtitle_bold = gr.Checkbox(label="副标题加粗", value=False)
-                dd_subtitle_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="副标题对齐", value="center", scale=2)
+                dd_subtitle_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="副标题对齐", value="居中", scale=2)
                 num_subtitle_indent = gr.Number(label="副标题缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_heading1_font = gr.Dropdown(choices=_FONT_CHOICES, label="标题一字体", scale=2)
                 dd_heading1_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="标题一字号", value="三号(16pt)")
                 chk_heading1_bold = gr.Checkbox(label="标题一加粗", value=True)
-                dd_heading1_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题一对齐", value="center", scale=2)
+                dd_heading1_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题一对齐", value="居中", scale=2)
                 num_heading1_indent = gr.Number(label="标题一缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_heading2_font = gr.Dropdown(choices=_FONT_CHOICES, label="标题二字体", scale=2)
                 dd_heading2_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="标题二字号", value="三号(16pt)")
                 chk_heading2_bold = gr.Checkbox(label="标题二加粗", value=True)
-                dd_heading2_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题二对齐", value="center", scale=2)
+                dd_heading2_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题二对齐", value="居中", scale=2)
                 num_heading2_indent = gr.Number(label="标题二缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_heading3_font = gr.Dropdown(choices=_FONT_CHOICES, label="标题三字体", scale=2)
                 dd_heading3_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="标题三字号", value="三号(16pt)")
                 chk_heading3_bold = gr.Checkbox(label="标题三加粗", value=True)
-                dd_heading3_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题三对齐", value="center", scale=2)
+                dd_heading3_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题三对齐", value="居中", scale=2)
                 num_heading3_indent = gr.Number(label="标题三缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_heading4_font = gr.Dropdown(choices=_FONT_CHOICES, label="标题四字体", scale=2)
                 dd_heading4_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="标题四字号", value="三号(16pt)")
                 chk_heading4_bold = gr.Checkbox(label="标题四加粗", value=True)
-                dd_heading4_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题四对齐", value="center", scale=2)
+                dd_heading4_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="标题四对齐", value="居中", scale=2)
                 num_heading4_indent = gr.Number(label="标题四缩进(字符)", value=0, minimum=0, maximum=100, step=0.5)
             with gr.Row():
                 dd_body_font = gr.Dropdown(choices=_FONT_CHOICES, label="正文字体", scale=2)
                 dd_body_size = gr.Dropdown(choices=_FONT_SIZE_CHOICES, label="正文字号", value="四号(14pt)")
-                dd_body_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="正文对齐", value="unknown", scale=2)
+                dd_body_align = gr.Dropdown(choices=_ALIGN_CHOICES, label="正文对齐", value="未知", scale=2)
                 num_body_indent = gr.Number(label="正文缩进(字符)", value=2, minimum=0, maximum=100, step=0.5)
+                dd_body_line_spacing_unit = gr.Dropdown(
+                    choices=["倍", "磅"], label="行距单位", value="倍", scale=1
+                )
                 num_body_line_spacing = gr.Number(label="行距", value=1.5, minimum=0.5, maximum=72, step=0.5)
 
         # ── 5. 段落列表 ──
@@ -467,22 +500,20 @@ def build_ui() -> gr.Blocks:
                 gr.update(value=header_content),
                 gr.update(value=_safe_choice(header_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(header_style.font_size)),
-                gr.update(value=_safe_choice(
-                    header_style.alignment.value if header_style.alignment else None,
-                    _ALIGN_CHOICES,
-                ) or "center"),
+                gr.update(value=_align_en_to_cn(
+                    header_style.alignment.value if header_style.alignment else None
+                )),
                 gr.update(value=page_number_enabled),
                 gr.update(value=page_format),
-                gr.update(value=page_align),
+                gr.update(value=_align_en_to_cn(page_align)),
                 gr.update(value=odd_even_enabled),
                 gr.update(value=even_header_content, visible=odd_even_enabled),
                 gr.update(value=_safe_choice(even_header_style.font_name, _FONT_CHOICES), visible=odd_even_enabled),
                 gr.update(value=_closest_font_size(even_header_style.font_size), visible=odd_even_enabled),
-                gr.update(value=_safe_choice(
-                    even_header_style.alignment.value if even_header_style.alignment else None,
-                    _ALIGN_CHOICES,
-                ) or "center", visible=odd_even_enabled),
-                gr.update(value=even_page_align, visible=odd_even_enabled),
+                gr.update(value=_align_en_to_cn(
+                    even_header_style.alignment.value if even_header_style.alignment else None
+                ), visible=odd_even_enabled),
+                gr.update(value=_align_en_to_cn(even_page_align), visible=odd_even_enabled),
                 gr.update(value=footer_distance_cm),
                 gr.update(value=2.54),
                 gr.update(value=2.54),
@@ -492,42 +523,42 @@ def build_ui() -> gr.Blocks:
                 gr.update(value=_safe_choice(title_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(title_style.font_size)),
                 gr.update(value=title_style.bold if title_style.bold is not None else True),
-                gr.update(value=_safe_choice(title_style.alignment.value if title_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(title_style.alignment.value if title_style.alignment else None)),
                 gr.update(value=_pt_to_chars(title_style.first_line_indent, title_style.font_size)),
                 # 副标题 (5个)
                 gr.update(value=_safe_choice(subtitle_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(subtitle_style.font_size)),
                 gr.update(value=subtitle_style.bold if subtitle_style.bold is not None else False),
-                gr.update(value=_safe_choice(subtitle_style.alignment.value if subtitle_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(subtitle_style.alignment.value if subtitle_style.alignment else None)),
                 gr.update(value=_pt_to_chars(subtitle_style.first_line_indent, subtitle_style.font_size)),
                 # 标题一 (5个)
                 gr.update(value=_safe_choice(heading1_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(heading1_style.font_size)),
                 gr.update(value=heading1_style.bold if heading1_style.bold is not None else True),
-                gr.update(value=_safe_choice(heading1_style.alignment.value if heading1_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(heading1_style.alignment.value if heading1_style.alignment else None)),
                 gr.update(value=_pt_to_chars(heading1_style.first_line_indent, heading1_style.font_size)),
                 # 标题二 (5个)
                 gr.update(value=_safe_choice(heading2_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(heading2_style.font_size)),
                 gr.update(value=heading2_style.bold if heading2_style.bold is not None else True),
-                gr.update(value=_safe_choice(heading2_style.alignment.value if heading2_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(heading2_style.alignment.value if heading2_style.alignment else None)),
                 gr.update(value=_pt_to_chars(heading2_style.first_line_indent, heading2_style.font_size)),
                 # 标题三 (5个)
                 gr.update(value=_safe_choice(heading3_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(heading3_style.font_size)),
                 gr.update(value=heading3_style.bold if heading3_style.bold is not None else True),
-                gr.update(value=_safe_choice(heading3_style.alignment.value if heading3_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(heading3_style.alignment.value if heading3_style.alignment else None)),
                 gr.update(value=_pt_to_chars(heading3_style.first_line_indent, heading3_style.font_size)),
                 # 标题四 (5个)
                 gr.update(value=_safe_choice(heading4_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(heading4_style.font_size)),
                 gr.update(value=heading4_style.bold if heading4_style.bold is not None else True),
-                gr.update(value=_safe_choice(heading4_style.alignment.value if heading4_style.alignment else None, _ALIGN_CHOICES) or "center"),
+                gr.update(value=_align_en_to_cn(heading4_style.alignment.value if heading4_style.alignment else None)),
                 gr.update(value=_pt_to_chars(heading4_style.first_line_indent, heading4_style.font_size)),
                 # 正文 (6个)
                 gr.update(value=_safe_choice(body_style.font_name, _FONT_CHOICES)),
                 gr.update(value=_closest_font_size(body_style.font_size)),
-                gr.update(value=_safe_choice(body_style.alignment.value if body_style.alignment else None, _ALIGN_CHOICES) or "unknown"),
+                gr.update(value=_align_en_to_cn(body_style.alignment.value if body_style.alignment else None)),
                 gr.update(value=_pt_to_chars(body_style.first_line_indent, body_style.font_size) or 2),
                 gr.update(value=body_style.line_spacing if body_style.line_spacing else 1.5),
                 gr.update(value=df_data),
@@ -598,6 +629,7 @@ def build_ui() -> gr.Blocks:
             body_size: str,
             body_align: str,
             body_indent: float,
+            body_line_spacing_unit: str,
             body_line_spacing: float,
             # 段落
             df_value: Any,
@@ -626,7 +658,7 @@ def build_ui() -> gr.Blocks:
                 header_style_obj = TextStyleInput(
                     font_name=header_font or None,
                     font_size=header_size_pt,
-                    alignment=AlignmentType(header_align) if _safe_choice(header_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(header_align)) if _safe_choice(header_align, _ALIGN_CHOICES) else None,
                 )
 
                 header_input = HeaderFooterInput(
@@ -640,7 +672,7 @@ def build_ui() -> gr.Blocks:
                     format=page_format_val or "{PAGE}",
                 )
                 footer_style_obj = TextStyleInput(
-                    alignment=AlignmentType(page_align_val) if _safe_choice(page_align_val, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(page_align_val)) if _safe_choice(page_align_val, _ALIGN_CHOICES) else None,
                 )
                 footer_input = HeaderFooterInput(
                     content=None,
@@ -664,7 +696,7 @@ def build_ui() -> gr.Blocks:
                     even_header_style_obj = TextStyleInput(
                         font_name=even_header_font or None,
                         font_size=even_header_size_pt,
-                        alignment=AlignmentType(even_header_align) if _safe_choice(even_header_align, _ALIGN_CHOICES) else None,
+                        alignment=AlignmentType(_align_cn_to_en(even_header_align)) if _safe_choice(even_header_align, _ALIGN_CHOICES) else None,
                     )
                     sections[0].even_page_header = HeaderFooterInput(
                         content=even_header,
@@ -672,7 +704,7 @@ def build_ui() -> gr.Blocks:
                     )
                 if odd_even and page_enabled:
                     even_footer_style = TextStyleInput(
-                        alignment=AlignmentType(even_page_align_val) if _safe_choice(even_page_align_val, _ALIGN_CHOICES) else None,
+                        alignment=AlignmentType(_align_cn_to_en(even_page_align_val)) if _safe_choice(even_page_align_val, _ALIGN_CHOICES) else None,
                     )
                     sections[0].even_page_footer = HeaderFooterInput(
                         content=None,
@@ -716,50 +748,52 @@ def build_ui() -> gr.Blocks:
                     font_name=title_font or None,
                     font_size=title_size_pt,
                     bold=title_bold,
-                    alignment=AlignmentType(title_align) if _safe_choice(title_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(title_align)) if _safe_choice(title_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(title_indent_val * (title_size_pt or 16), 1) if title_indent_val else None,
                 )
                 subtitle_style_obj = TextStyleInput(
                     font_name=subtitle_font or None,
                     font_size=subtitle_size_pt,
                     bold=subtitle_bold,
-                    alignment=AlignmentType(subtitle_align) if _safe_choice(subtitle_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(subtitle_align)) if _safe_choice(subtitle_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(subtitle_indent_val * (subtitle_size_pt or 16), 1) if subtitle_indent_val else None,
                 )
                 heading1_style_obj = TextStyleInput(
                     font_name=heading1_font or None,
                     font_size=heading1_size_pt,
                     bold=heading1_bold,
-                    alignment=AlignmentType(heading1_align) if _safe_choice(heading1_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(heading1_align)) if _safe_choice(heading1_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(heading1_indent_val * (heading1_size_pt or 16), 1) if heading1_indent_val else None,
                 )
                 heading2_style_obj = TextStyleInput(
                     font_name=heading2_font or None,
                     font_size=heading2_size_pt,
                     bold=heading2_bold,
-                    alignment=AlignmentType(heading2_align) if _safe_choice(heading2_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(heading2_align)) if _safe_choice(heading2_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(heading2_indent_val * (heading2_size_pt or 16), 1) if heading2_indent_val else None,
                 )
                 heading3_style_obj = TextStyleInput(
                     font_name=heading3_font or None,
                     font_size=heading3_size_pt,
                     bold=heading3_bold,
-                    alignment=AlignmentType(heading3_align) if _safe_choice(heading3_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(heading3_align)) if _safe_choice(heading3_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(heading3_indent_val * (heading3_size_pt or 16), 1) if heading3_indent_val else None,
                 )
                 heading4_style_obj = TextStyleInput(
                     font_name=heading4_font or None,
                     font_size=heading4_size_pt,
                     bold=heading4_bold,
-                    alignment=AlignmentType(heading4_align) if _safe_choice(heading4_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(heading4_align)) if _safe_choice(heading4_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(heading4_indent_val * (heading4_size_pt or 16), 1) if heading4_indent_val else None,
                 )
+                effective_line_spacing = body_line_spacing if body_line_spacing_unit == "磅" else (body_line_spacing if body_line_spacing_unit == "倍" else 1.5)
                 body_style_obj = TextStyleInput(
                     font_name=body_font or None,
                     font_size=body_size_pt,
-                    alignment=AlignmentType(body_align) if _safe_choice(body_align, _ALIGN_CHOICES) else None,
+                    alignment=AlignmentType(_align_cn_to_en(body_align)) if _safe_choice(body_align, _ALIGN_CHOICES) else None,
                     first_line_indent=round(body_indent * (body_size_pt or 16), 1) if body_indent else None,
-                    line_spacing=body_line_spacing,
+                    line_spacing=effective_line_spacing,
+                    line_spacing_is_pt=(body_line_spacing_unit == "磅"),
                 )
 
                 for para in paragraphs:
@@ -1082,7 +1116,7 @@ def build_ui() -> gr.Blocks:
                 dd_heading2_font, dd_heading2_size, chk_heading2_bold, dd_heading2_align, num_heading2_indent,
                 dd_heading3_font, dd_heading3_size, chk_heading3_bold, dd_heading3_align, num_heading3_indent,
                 dd_heading4_font, dd_heading4_size, chk_heading4_bold, dd_heading4_align, num_heading4_indent,
-                dd_body_font, dd_body_size, dd_body_align, num_body_indent, num_body_line_spacing,
+                dd_body_font, dd_body_size, dd_body_align, num_body_indent, dd_body_line_spacing_unit, num_body_line_spacing,
                 df_paragraphs,
             ],
             outputs=[file_output],
