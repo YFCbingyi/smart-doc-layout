@@ -23,7 +23,7 @@ class ParagraphType(str, Enum):
     body = "body"
     list = "list"
     table = "table"
-    other = "other"
+    skip = "skip"
 
 
 class AlignmentType(str, Enum):

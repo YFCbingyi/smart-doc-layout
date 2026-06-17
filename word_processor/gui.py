@@ -73,7 +73,7 @@ _FONT_SIZE_CHOICES = [f"{name}({int(pt) if pt == int(pt) else pt}pt)" for name, 
 
 _DF_HEADERS = ["选择", "序号", "段落类型", "文本内容"]
 _DF_DATATYPE = ["bool", "str", "str", "str"]
-_PARAGRAPH_TYPE_CHOICES = ["主标题", "副标题", "标题一", "标题二", "标题三", "标题四", "正文"]
+_PARAGRAPH_TYPE_CHOICES = ["主标题", "副标题", "标题一", "标题二", "标题三", "标题四", "正文", "封面落款"]
 
 # ─────────────────────────────────────────────
 # 辅助函数
@@ -96,6 +96,8 @@ def _type_to_cn(p: ParagraphModify) -> str:
     elif p.type == ParagraphType.heading:
         level_map = {1: "标题一", 2: "标题二", 3: "标题三", 4: "标题四"}
         return level_map.get(p.heading_level or 1, "标题一")
+    elif p.type == ParagraphType.skip:
+        return "封面落款"
     else:
         return "正文"
 
@@ -432,7 +434,8 @@ def build_ui() -> gr.Blocks:
             # ── 调试：保存识别后的 JSON ──
             if debug_mode and modify_data is not None:
                 stem = os.path.splitext(os.path.basename(file_path))[0]
-                debug_path = os.path.join(os.path.dirname(file_path), f"{stem}_recognized.json")
+                debug_dir = os.getcwd()
+                debug_path = os.path.join(debug_dir, f"{stem}_recognized.json")
                 try:
                     with open(debug_path, "w", encoding="utf-8") as f:
                         json.dump(
@@ -815,9 +818,23 @@ def build_ui() -> gr.Blocks:
                                 para.style = heading4_style_obj
                             else:
                                 para.style = heading1_style_obj
-                    elif para.type in (ParagraphType.body, ParagraphType.other, ParagraphType.list):
+                    elif para.type in (ParagraphType.body, ParagraphType.list):
                         if para.style is None:
                             para.style = body_style_obj
+
+                # ── 从 state_data 恢复 skip 段落的原始样式 ──
+                if _state_data is not None:
+                    orig_paras = _state_data.get("paragraphs", [])
+                    orig_by_index = {}
+                    for op in orig_paras:
+                        idx = op.get("index")
+                        if idx is not None:
+                            orig_by_index[idx] = op
+                    for para in paragraphs:
+                        if para.type == ParagraphType.skip:
+                            orig = orig_by_index.get(para.index)
+                            if orig and orig.get("style") is not None:
+                                para.style = TextStyleInput(**orig["style"])
 
                 modify_data = ModifyInput(
                     sections=sections,
@@ -827,7 +844,8 @@ def build_ui() -> gr.Blocks:
                 # ── 调试：保存修改前的 JSON ──
                 if debug_mode:
                     stem = os.path.splitext(os.path.basename(file_path))[0]
-                    config_path = os.path.join(os.path.dirname(file_path), f"{stem}_modified_config.json")
+                    debug_dir = os.getcwd()
+                    config_path = os.path.join(debug_dir, f"{stem}_modified_config.json")
                     try:
                         with open(config_path, "w", encoding="utf-8") as f:
                             json.dump(
@@ -998,6 +1016,7 @@ def build_ui() -> gr.Blocks:
             "标题三": (ParagraphType.heading, 3),
             "标题四": (ParagraphType.heading, 4),
             "正文": (ParagraphType.body, None),
+            "封面落款": (ParagraphType.skip, None),
         }
 
 
@@ -1019,7 +1038,7 @@ def build_ui() -> gr.Blocks:
                 if type_str.strip() in mapping:
                     p_type, heading_level = mapping[type_str.strip()]
                 else:
-                    p_type = ParagraphType.other
+                    p_type = ParagraphType.skip
             paragraphs.append(
                 ParagraphModify(
                     index=p_idx,

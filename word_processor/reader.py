@@ -107,16 +107,23 @@ def _detect_heading_by_content(para: ParagraphModify) -> tuple[ParagraphType, Op
 
 
 def _detect_title_subtitle(paragraphs: list[ParagraphModify]) -> None:
-    """智能识别文档开头的主标题和副标题。"""
+    """智能识别文档正文开头的主标题和副标题（跳过已标记的封面区域）。"""
+    # 找到正文起始位置（第一个非封面段落）
+    start_idx = 0
+    for i, p in enumerate(paragraphs):
+        if p.type != ParagraphType.skip:
+            start_idx = i
+            break
+
     body_sizes = [
         p.style.font_size
-        for p in paragraphs
+        for p in paragraphs[start_idx:]
         if p.style is not None and p.style.font_size is not None and p.type == ParagraphType.body
     ]
     avg_body_size = sum(body_sizes) / len(body_sizes) if body_sizes else 12.0
 
     title_candidate: Optional[ParagraphModify] = None
-    for p in paragraphs:
+    for p in paragraphs[start_idx:]:
         text = (p.text or "").strip()
         if not text:
             continue
@@ -134,6 +141,146 @@ def _detect_title_subtitle(paragraphs: list[ParagraphModify]) -> None:
                 and p.style.font_size == title_candidate.style.font_size
             )
             p.type = ParagraphType.title if same_font else ParagraphType.subtitle
+
+
+def _detect_cover_area(paragraphs: list[ParagraphModify]) -> None:
+    """识别文档封面区域，标记为 other 类型。
+
+    封面是文档开头的区域，通常包含文档标题、作者、单位等信息，
+    这部分不参与样式修改。
+
+    识别逻辑：从文档开头扫描，连续满足以下条件之一即为封面：
+    - 空白段落（用于间距）
+    - 居中对齐的段落（封面标题/作者）
+    - 右对齐的段落（封面单位/日期，需同时满足：
+      (a) 前面出现过居中内容；
+      (b) 右对齐块之后的下一个非空段落是居中段落 → 是封面落款；
+      如果右对齐块之后直接跟正文，则视为副标题，不归入封面）
+    遇到以下情况时结束封面区域：
+    - 标题段落（正文开始）
+    - 左对齐或两端对齐的非空段落（正文内容）
+    - 右对齐段落但前面没有居中内容（可能是正文右对齐段落）
+    - 在已识别出右对齐封面内容后，后续居中的段落视为正文标题
+    """
+    if not paragraphs:
+        return
+
+    first_content_idx: Optional[int] = None
+    saw_centered = False
+    saw_right_aligned_in_cover = False
+
+    for i, p in enumerate(paragraphs):
+        text = (p.text or "").strip()
+
+        # 空白段落属于封面（用于间距）
+        if not text:
+            continue
+
+        # 标题段落表示正文开始
+        if p.type == ParagraphType.heading:
+            first_content_idx = i
+            break
+
+        alignment = p.style.alignment if p.style is not None else None
+
+        # 居中对齐的段落
+        if alignment == AlignmentType.center:
+            if saw_right_aligned_in_cover:
+                # 在右对齐封面内容（单位/日期）之后出现居中内容 → 正文标题
+                first_content_idx = i
+                break
+            saw_centered = True
+            continue  # 居中属于封面
+
+        # 右对齐的段落
+        if alignment == AlignmentType.right:
+            if not saw_centered:
+                # 前面无居中内容 → 正文中的右对齐段落
+                first_content_idx = i
+                break
+            # 前面有居中内容：检查这是封面落款还是副标题
+            # 跳过所有连续右对齐段落，看后面跟什么
+            j = i + 1
+            while j < len(paragraphs):
+                t = (paragraphs[j].text or "").strip()
+                a = paragraphs[j].style.alignment if paragraphs[j].style else None
+                if t and a != AlignmentType.right:
+                    break
+                j += 1
+            # 找右对齐块之后的下一个非空段落
+            next_non_empty = None
+            for k in range(j, len(paragraphs)):
+                if (paragraphs[k].text or "").strip():
+                    next_non_empty = paragraphs[k]
+                    break
+            if next_non_empty is not None:
+                na = next_non_empty.style.alignment if next_non_empty.style else None
+                if na != AlignmentType.center and next_non_empty.type != ParagraphType.heading:
+                    # 右对齐块后直接跟正文 → 这是副标题，不是封面落款
+                    # 整个文档无封面区域
+                    first_content_idx = 0
+                    break
+            # 右对齐块后跟居中内容（正文标题）→ 属于封面落款
+            saw_right_aligned_in_cover = True
+            continue
+
+        # 左对齐/两端对齐/其他 → 正文开始
+        first_content_idx = i
+        break
+
+    if first_content_idx is None:
+        first_content_idx = len(paragraphs)
+
+    if first_content_idx > 0:
+        for p in paragraphs[:first_content_idx]:
+            p.type = ParagraphType.skip
+            p.heading_level = None
+
+
+def _detect_signature_area(paragraphs: list[ParagraphModify]) -> None:
+    """识别文档末尾的落款区域（单位名称和日期），标记为 other 类型。
+
+    落款特征：文档末尾连续右对齐的非空段落，通常为 1-3 行，
+    例如最后两行分别是单位名称和日期。
+
+    识别逻辑：从文档末尾向前扫描最多 10 个段落，收集连续右对齐
+    的非空段落及其前面的空白行，标记为 other。
+    """
+    if not paragraphs:
+        return
+
+    n = len(paragraphs)
+    scan_start = max(0, n - 10)
+    sig_start = n  # 落款起始索引，默认无落款
+
+    found_signature = False
+    for i in range(n - 1, scan_start - 1, -1):
+        p = paragraphs[i]
+        text = (p.text or "").strip()
+
+        if found_signature:
+            # 已在落款区域中：空白行或右对齐段落继续扩展区域
+            if not text:
+                sig_start = i
+                continue
+            if p.style is not None and p.style.alignment == AlignmentType.right:
+                sig_start = i
+                continue
+            break  # 遇到非空白、非右对齐段落，落款结束
+        else:
+            # 尚未找到落款
+            if not text:
+                continue  # 跳过末尾空白行
+            if p.style is not None and p.style.alignment == AlignmentType.right:
+                found_signature = True
+                sig_start = i
+                continue
+            break  # 非右对齐，不是落款
+
+    if sig_start < n:
+        for p in paragraphs[sig_start:]:
+            p.type = ParagraphType.skip
+            p.heading_level = None
 
 
 def _extract_paragraph_style(paragraph: Paragraph) -> TextStyleInput:
@@ -308,8 +455,14 @@ def read_document(file_path: str, smart: bool = True) -> ModifyInput:
                     p.type = new_type
                     p.heading_level = new_level
 
-        # ── 第3步：智能识别主标题/副标题（文档开头） ──
+        # ── 第3步：智能识别封面区域（标记为skip，不参与样式修改） ──
+        _detect_cover_area(paragraphs)
+
+        # ── 第4步：智能识别主标题/副标题（正文开头，跳过封面） ──
         _detect_title_subtitle(paragraphs)
+
+        # ── 第5步：智能识别文末落款（单位名称和日期，标记为skip） ──
+        _detect_signature_area(paragraphs)
 
     return ModifyInput(
         sections=sections,
