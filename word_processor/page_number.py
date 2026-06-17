@@ -125,21 +125,22 @@ def add_page_number(
     # 清除段落原有内容
     paragraph.clear()
 
-    # 解析格式字符串，将 {PAGE} 和 {NUMPAGES} 替换为字段
+    # 解析格式字符串，将 {PAGE} 和 {NUMPAGES} 替换为字段（不区分大小写）
+    format_upper = format_str.upper()
     parts = []
     i = 0
     while i < len(format_str):
-        if format_str[i : i + 6] == "{PAGE}":
+        if format_upper[i : i + 6] == "{PAGE}":
             parts.append(("field", "PAGE"))
             i += 6
-        elif format_str[i : i + 10] == "{NUMPAGES}":
+        elif format_upper[i : i + 10] == "{NUMPAGES}":
             parts.append(("field", "NUMPAGES"))
             i += 10
         else:
             # 收集普通文本
             j = i
             while j < len(format_str):
-                remaining = format_str[j:]
+                remaining = format_upper[j:]
                 if remaining.startswith("{PAGE}") or remaining.startswith("{NUMPAGES}"):
                     break
                 j += 1
