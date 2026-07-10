@@ -11,6 +11,7 @@ from typing import Optional
 from docx import Document as DocxDocument
 from docx.document import Document as DocumentType
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt, RGBColor
 from docx.text.paragraph import Paragraph
@@ -66,7 +67,7 @@ def _apply_style_to_run(run: Run, style: TextStyleInput) -> None:
         rpr = run._element.get_or_add_rPr()
         ea_font = rpr.find(qn("w:rFonts"))
         if ea_font is None:
-            ea_font = __import__("docx.oxml", fromlist=["OxmlElement"]).OxmlElement("w:rFonts")
+            ea_font = OxmlElement("w:rFonts")
             rpr.insert(0, ea_font)
         if style.font_name:
             ea_font.set(qn("w:eastAsia"), style.font_name)
@@ -177,6 +178,13 @@ def _set_page_number_font(paragraph: Paragraph, modify_data: HeaderFooterInput) 
             r.font.size = Pt(font_size_pt)
         if font_name is not None:
             r.font.name = font_name
+            # 同时设置东亚字体（对中文页码有效，与 _apply_style_to_run 一致）
+            rpr = r._element.get_or_add_rPr()
+            rfonts = rpr.find(qn("w:rFonts"))
+            if rfonts is None:
+                rfonts = OxmlElement("w:rFonts")
+                rpr.insert(0, rfonts)
+            rfonts.set(qn("w:eastAsia"), font_name)
 
 
 def _set_heading_level(paragraph: Paragraph, level: int) -> None:
